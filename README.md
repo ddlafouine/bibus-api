@@ -120,11 +120,3 @@ curl "http://localhost:8000/stops/S1/departures?realtime=false"
   `/lines` et `/stops` pour les découvrir.
 - Le token dans les URLs GTFS-RT (`app/config.py`) est le token public publié
   sur la fiche du jeu de données transport.data.gouv.fr, pas un secret perso.
-
-## Pour aller plus loin (pistes, pas implémenté)
-
-- Tests (pytest) sur `services/schedule.py` et `services/realtime.py`
-- APScheduler pour relancer l'ETL GTFS statique automatiquement (1x/nuit)
-- Dockerfile + docker-compose (service API + service cron ETL)
-- Endpoint `/lines/{id}/shape` (tracé GeoJSON) depuis `shapes.txt`
-- Auth (clé API) si l'API est un jour exposée publiquement
