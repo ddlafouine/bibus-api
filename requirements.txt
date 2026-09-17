@@ -1,0 +1,5 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pandas>=2.0
+requests>=2.31
+gtfs-realtime-bindings>=1.0

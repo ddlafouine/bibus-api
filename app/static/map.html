@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>Carte Bibus</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body, #map { height: 100%; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+  #banner {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 1000; background: #222; color: #fff; padding: 6px 14px;
+    border-radius: 6px; font-size: 13px; display: none;
+  }
+  #legend {
+    position: absolute; bottom: 20px; left: 10px; z-index: 1000;
+    background: white; padding: 8px 12px; border-radius: 6px;
+    font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  }
+  .stop-dot { background: #666; border-radius: 50%; opacity: 0.6; }
+  .vehicle-icon {
+    border-radius: 50%; color: white; font-size: 11px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border: 2px solid white;
+    box-shadow: 0 0 3px rgba(0,0,0,.5);
+  }
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<div id="legend">
+  <div><span style="color:#666">●</span> Arrêt</div>
+  <div><span style="color:#0072BC">●</span> Bus (couleur = ligne)</div>
+  <div id="last-update" style="color:#888; margin-top:4px;"></div>
+</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([48.3904, -4.4861], 13); // Brest
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19,
+}).addTo(map);
+
+const stopsLayer = L.layerGroup().addTo(map);
+const vehiclesLayer = L.layerGroup().addTo(map);
+let routeColors = {}; // route_id -> "#RRGGBB"
+
+function showBanner(msg) {
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.style.display = msg ? 'block' : 'none';
+}
+
+async function loadLines() {
+  try {
+    const res = await fetch('/lines');
+    const lines = await res.json();
+    lines.forEach(l => {
+      routeColors[l.route_id] = l.color ? `#${l.color}` : '#0072BC';
+    });
+  } catch (e) {
+    console.error('Erreur /lines', e);
+  }
+}
+
+async function loadStops() {
+  try {
+    const res = await fetch('/stops?limit=2000');
+    const stops = await res.json();
+    stopsLayer.clearLayers();
+    stops.forEach(s => {
+      if (s.lat == null || s.lon == null) return;
+      L.circleMarker([s.lat, s.lon], {
+        radius: 3, className: 'stop-dot', color: '#666', weight: 1,
+      })
+        .bindPopup(`<b>${s.name ?? s.stop_id}</b><br/>arrêt ${s.stop_id}`)
+        .addTo(stopsLayer);
+    });
+  } catch (e) {
+    console.error('Erreur /stops', e);
+  }
+}
+
+async function loadVehicles() {
+  try {
+    const res = await fetch('/realtime/vehicles');
+    if (!res.ok) {
+      showBanner('Temps réel indisponible pour le moment (horaires théoriques seuls sur /stops).');
+      return;
+    }
+    showBanner('');
+    const vehicles = await res.json();
+    vehiclesLayer.clearLayers();
+    vehicles.forEach(v => {
+      if (v.lat == null || v.lon == null) return;
+      const color = routeColors[v.route_id] || '#0072BC';
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="vehicle-icon" style="background:${color}">${v.route_id ?? '?'}</div>`,
+        iconSize: [22, 22],
+      });
+      L.marker([v.lat, v.lon], { icon })
+        .bindPopup(
+          `<b>Ligne ${v.route_id ?? '?'}</b><br/>` +
+          `Véhicule ${v.vehicle_id ?? '?'}<br/>` +
+          `Trip ${v.trip_id ?? '?'}`
+        )
+        .addTo(vehiclesLayer);
+    });
+    document.getElementById('last-update').textContent =
+      `${vehicles.length} bus · maj ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    console.error('Erreur /realtime/vehicles', e);
+    showBanner('Temps réel indisponible pour le moment.');
+  }
+}
+
+async function init() {
+  await loadLines();
+  await loadStops();
+  await loadVehicles();
+  setInterval(loadVehicles, 15000); // les positions sont republiées ~15-30s côté Bibus
+}
+
+init();
+</script>
+</body>
+</html>
